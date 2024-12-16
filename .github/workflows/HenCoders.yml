@@ -1,0 +1,73 @@
+name: Setup Cloudflared Tunnel for RDP with Audio
+
+on: workflow_dispatch
+
+jobs:
+  setup-rdp:
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+    - name: Install Cloudflared
+      run: |
+        Invoke-WebRequest -Uri https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe -OutFile cloudflared.exe
+        Move-Item -Path cloudflared.exe -Destination "C:\Program Files\Cloudflared\cloudflared.exe"
+        $env:Path += ";C:\Program Files\Cloudflared"
+
+    - name: Download Cloudflared config and credentials
+      run: |
+        $config_url = "https://raw.githubusercontent.com/DevIndonesia1/Private/refs/heads/main/config.yml?token=${{ secrets.CONFIG_TOKEN }}"
+        Invoke-WebRequest -Uri $config_url -OutFile "C:\Users\administrator\.cloudflared\config.yml"
+        
+        $json_url = "https://raw.githubusercontent.com/DevIndonesia1/Private/refs/heads/main/bde3a800-f318-404b-9961-24cb71aac340.json?token=${{ secrets.TUNNEL_TOKEN }}"
+        Invoke-WebRequest -Uri $json_url -OutFile "C:\Users\administrator\.cloudflared\bde3a800-f318-404b-9961-24cb71aac340.json"
+        
+        $cert_url = "https://raw.githubusercontent.com/DevIndonesia1/Private/refs/heads/main/cert.pem?token=${{ secrets.CERT_TOKEN }}"
+        Invoke-WebRequest -Uri $cert_url -OutFile "C:\Users\administrator\.cloudflared\cert.pem"
+
+    - name: Create Cloudflared Service
+      run: |
+        sc.exe create cloudflared binPath= "C:\Program Files\Cloudflared\cloudflared.exe tunnel --config C:\Users\administrator\.cloudflared\config.yml run" start= auto
+
+    - name: Start Cloudflared Tunnel
+      run: |
+        Start-Service cloudflared
+
+    - name: Create Administrator Account
+      run: |
+        net user administrator HenCoders13 /add
+        net localgroup administrators administrator /add
+
+    - name: Enable RDP and Allow Firewall Rules
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+
+    - name: Enable Sound for RDP
+      run: |
+        powershell -Command "& { 
+          $audioService = Get-Service -Name 'AudioSrv'; 
+          if ($audioService.Status -ne 'Running') { Start-Service -Name 'AudioSrv' }; 
+          $device = Get-WmiObject -Class Win32_SoundDevice; 
+          $device | ForEach-Object { $_.SetPowerState(1, 0) }; 
+          $volume = (Get-WmiObject -Class Win32_SoundDevice).DeviceID; 
+          (Get-WmiObject -Class Win32_SoundDevice | Where-Object {$_.DeviceID -eq $volume}).SetPowerState(1, 0) 
+        }"
+
+    - name: Start RDP session
+      run: |
+        # Simulate the RDP connection (not connecting, just ensuring session starts)
+        cmd /c echo "Starting RDP session..."
+
+    - name: Logs every 10 seconds
+      run: |
+        $endTime = (Get-Date).AddHours(6)
+        while((Get-Date) -lt $endTime) {
+          Write-Host "©HenCoders 2024/2025"
+          Start-Sleep -Seconds 10
+        }
+
+    - name: Complete the project after 6 hours
+      run: |
+        Write-Host "Project complete after 6 hours."
